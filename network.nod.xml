@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<nodes>
+    <node id="j00" x="0"   y="0"   type="traffic_light"/>
+    <node id="j10" x="200" y="0"   type="traffic_light"/>
+    <node id="j20" x="400" y="0"   type="traffic_light"/>
+    <node id="j30" x="600" y="0"   type="traffic_light"/>
+    <node id="j40" x="800" y="0"   type="traffic_light"/>
+
+    <node id="j01" x="0"   y="200" type="traffic_light"/>
+    <node id="j11" x="200" y="200" type="traffic_light"/>
+    <node id="j21" x="400" y="200" type="traffic_light"/>
+    <node id="j31" x="600" y="200" type="traffic_light"/>
+    <node id="j41" x="800" y="200" type="traffic_light"/>
+
+    <node id="j02" x="0"   y="400" type="traffic_light"/>
+    <node id="j12" x="200" y="400" type="traffic_light"/>
+    <node id="j22" x="400" y="400" type="traffic_light"/>
+    <node id="j32" x="600" y="400" type="traffic_light"/>
+    <node id="j42" x="800" y="400" type="traffic_light"/>
+
+    <node id="j03" x="0"   y="600" type="traffic_light"/>
+    <node id="j13" x="200" y="600" type="traffic_light"/>
+    <node id="j23" x="400" y="600" type="traffic_light"/>
+    <node id="j33" x="600" y="600" type="traffic_light"/>
+    <node id="j43" x="800" y="600" type="traffic_light"/>
+
+    <node id="j04" x="0"   y="800" type="traffic_light"/>
+    <node id="j14" x="200" y="800" type="traffic_light"/>
+    <node id="j24" x="400" y="800" type="traffic_light"/>
+    <node id="j34" x="600" y="800" type="traffic_light"/>
+    <node id="j44" x="800" y="800" type="traffic_light"/>
+</nodes>

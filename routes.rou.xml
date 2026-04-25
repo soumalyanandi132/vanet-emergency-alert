@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<routes>
+
+    <!-- ============================================================
+         Vehicle Types
+         vClass="emergency" gives the ambulance green-light priority
+         at all traffic_light junctions automatically in SUMO.
+         ============================================================ -->
+    <vType id="car"
+           accel="2.6" decel="4.5" sigma="0.5" length="5"
+           maxSpeed="13.89" guiShape="passenger" color="0,0,1"/>
+
+    <vType id="ambulance"
+           accel="3.5" decel="6.0" sigma="0.1" length="6"
+           maxSpeed="22.22" guiShape="emergency" color="1,0,0"
+           vClass="emergency"
+           speedFactor="1.5"/>
+
+    <!-- ============================================================
+         Routes
+         ============================================================ -->
+    <!-- Ambulance: full row-2 horizontal corridor -->
+    <route id="amb_route"  edges="j02_j12 j12_j22 j22_j32 j32_j42"/>
+
+    <!-- Cars on same road as ambulance — spread across the corridor -->
+    <route id="route_h2"   edges="j02_j12 j12_j22 j22_j32 j32_j42"/>
+
+    <!-- Cars on other horizontal roads -->
+    <route id="route_h0"   edges="j00_j10 j10_j20 j20_j30 j30_j40"/>
+    <route id="route_h1"   edges="j01_j11 j11_j21 j21_j31 j31_j41"/>
+    <route id="route_h3"   edges="j03_j13 j13_j23 j23_j33 j33_j43"/>
+
+    <!-- Cars on vertical roads (cross-traffic) -->
+    <route id="route_v0"   edges="j00_j01 j01_j02 j02_j03 j03_j04"/>
+    <route id="route_v1"   edges="j10_j11 j11_j12 j12_j13 j13_j14"/>
+    <route id="route_v2"   edges="j20_j21 j21_j22 j22_j23 j23_j24"/>
+    <route id="route_v3"   edges="j30_j31 j31_j32 j32_j33 j33_j34"/>
+    <route id="route_v4"   edges="j40_j41 j41_j42 j42_j43 j43_j44"/>
+
+    <!-- ============================================================
+         FLOWS — continuously spawn cars so vehicles are always
+         present throughout the 300-second simulation.
+
+         Row-2 (ambulance corridor): dense traffic so alerts trigger
+         vehsPerHour="360" ≈ one car every 10 s per lane
+         ============================================================ -->
+
+    <!-- Ambulance corridor — lane 0 -->
+    <flow id="flow_h2_L0" type="car" route="route_h2"
+          begin="0" end="290" vehsPerHour="360"
+          departLane="0" departPos="random" departSpeed="random"
+          arrivalLane="random"/>
+
+    <!-- Ambulance corridor — lane 1 -->
+    <flow id="flow_h2_L1" type="car" route="route_h2"
+          begin="0" end="290" vehsPerHour="360"
+          departLane="1" departPos="random" departSpeed="random"
+          arrivalLane="random"/>
+
+    <!-- Other horizontal roads (background traffic) -->
+    <flow id="flow_h0" type="car" route="route_h0"
+          begin="0" end="290" vehsPerHour="180"
+          departLane="best" departPos="random" departSpeed="random"/>
+
+    <flow id="flow_h1" type="car" route="route_h1"
+          begin="0" end="290" vehsPerHour="180"
+          departLane="best" departPos="random" departSpeed="random"/>
+
+    <flow id="flow_h3" type="car" route="route_h3"
+          begin="0" end="290" vehsPerHour="180"
+          departLane="best" departPos="random" departSpeed="random"/>
+
+    <!-- Vertical / cross-traffic -->
+    <flow id="flow_v0" type="car" route="route_v0"
+          begin="0" end="290" vehsPerHour="120"
+          departLane="best" departPos="random" departSpeed="random"/>
+
+    <flow id="flow_v1" type="car" route="route_v1"
+          begin="0" end="290" vehsPerHour="120"
+          departLane="best" departPos="random" departSpeed="random"/>
+
+    <flow id="flow_v2" type="car" route="route_v2"
+          begin="0" end="290" vehsPerHour="120"
+          departLane="best" departPos="random" departSpeed="random"/>
+
+    <flow id="flow_v3" type="car" route="route_v3"
+          begin="0" end="290" vehsPerHour="120"
+          departLane="best" departPos="random" departSpeed="random"/>
+
+    <flow id="flow_v4" type="car" route="route_v4"
+          begin="0" end="290" vehsPerHour="120"
+          departLane="best" departPos="random" departSpeed="random"/>
+
+    <!-- ============================================================
+         AMBULANCE — departs AFTER flows (sorted by depart time).
+         begin="0" flows come first, then this vehicle at t=5s.
+         ============================================================ -->
+    <vehicle id="ambulance_0" type="ambulance" route="amb_route"
+             depart="5" departLane="0" departPos="0" departSpeed="max"
+             color="1,0,0"/>
+
+</routes>
