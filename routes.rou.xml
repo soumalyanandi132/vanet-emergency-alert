@@ -6,28 +6,50 @@
          vClass="emergency" gives the ambulance green-light priority
          at all traffic_light junctions automatically in SUMO.
          ============================================================ -->
+    <!-- ── Regular passenger cars (mix of colours for visual variety) ── -->
     <vType id="car"
-           accel="2.6" decel="4.5" sigma="0.5" length="5"
-           maxSpeed="13.89" guiShape="passenger" color="0,0,1"/>
+           accel="2.6" decel="4.5" sigma="0.5" length="4.5"
+           maxSpeed="13.89" guiShape="passenger" color="0.1,0.4,1.0"
+           lcStrategic="1.0" lcCooperative="1.0"/>
 
+    <!-- ── Heavy trucks — large, slow, dark grey ── -->
+    <vType id="truck"
+           accel="1.5" decel="3.5" sigma="0.4" length="10"
+           maxSpeed="10.0" guiShape="truck" color="0.35,0.35,0.35"
+           lcStrategic="0.5" lcCooperative="0.8"/>
+
+    <!-- ── City buses — long, teal ── -->
+    <vType id="bus"
+           accel="1.8" decel="4.0" sigma="0.3" length="12"
+           maxSpeed="11.11" guiShape="bus" color="0.0,0.6,0.55"
+           lcStrategic="0.5" lcCooperative="0.9"/>
+
+    <!-- ── Motorcycles — fast, small, orange ── -->
+    <vType id="motorcycle"
+           accel="4.0" decel="6.5" sigma="0.6" length="2.2"
+           maxSpeed="16.67" guiShape="moped" color="1.0,0.45,0.0"
+           lcStrategic="1.5" lcCooperative="0.6"/>
+
+    <!-- ── Ambulances — emergency priority, bright red ── -->
     <vType id="ambulance"
-           accel="3.5" decel="6.0" sigma="0.1" length="6"
-           maxSpeed="22.22" guiShape="emergency" color="1,0,0"
-           vClass="emergency"
-           speedFactor="1.5"/>
+           accel="3.8" decel="6.5" sigma="0.05" length="6.5"
+           maxSpeed="25.0" guiShape="emergency" color="1,0,0"
+           vClass="emergency" speedFactor="1.6"
+           lcStrategic="2.0" lcCooperative="1.0"/>
 
     <!-- ============================================================
          Routes
          ============================================================ -->
-    <!-- Ambulance: full row-2 horizontal corridor -->
-    <route id="amb_route"  edges="j02_j12 j12_j22 j22_j32 j32_j42"/>
+    <!-- Ambulance corridors (one per horizontal row) -->
+    <route id="amb_route_r0" edges="j00_j10 j10_j20 j20_j30 j30_j40"/>
+    <route id="amb_route_r1" edges="j01_j11 j11_j21 j21_j31 j31_j41"/>
+    <route id="amb_route_r2" edges="j02_j12 j12_j22 j22_j32 j32_j42"/>
+    <route id="amb_route_r3" edges="j03_j13 j13_j23 j23_j33 j33_j43"/>
 
-    <!-- Cars on same road as ambulance — spread across the corridor -->
-    <route id="route_h2"   edges="j02_j12 j12_j22 j22_j32 j32_j42"/>
-
-    <!-- Cars on other horizontal roads -->
+    <!-- Cars on all horizontal roads -->
     <route id="route_h0"   edges="j00_j10 j10_j20 j20_j30 j30_j40"/>
     <route id="route_h1"   edges="j01_j11 j11_j21 j21_j31 j31_j41"/>
+    <route id="route_h2"   edges="j02_j12 j12_j22 j22_j32 j32_j42"/>
     <route id="route_h3"   edges="j03_j13 j13_j23 j23_j33 j33_j43"/>
 
     <!-- Cars on vertical roads (cross-traffic) -->
@@ -45,34 +67,49 @@
          vehsPerHour="360" ≈ one car every 10 s per lane
          ============================================================ -->
 
-    <!-- Ambulance corridor — lane 0 -->
-    <flow id="flow_h2_L0" type="car" route="route_h2"
+    <!-- ── Row 0 — mixed cars + trucks, dense ── -->
+    <flow id="flow_h0_cars" type="car"   route="route_h0"
+          begin="0" end="290" vehsPerHour="300"
+          departLane="best" departPos="random" departSpeed="random"/>
+    <flow id="flow_h0_trucks" type="truck" route="route_h0"
+          begin="0" end="290" vehsPerHour="80"
+          departLane="best" departPos="random" departSpeed="random"/>
+
+    <!-- ── Row 1 — cars + buses ── -->
+    <flow id="flow_h1_cars" type="car"  route="route_h1"
+          begin="0" end="290" vehsPerHour="300"
+          departLane="best" departPos="random" departSpeed="random"/>
+    <flow id="flow_h1_buses" type="bus" route="route_h1"
+          begin="0" end="290" vehsPerHour="60"
+          departLane="best" departPos="random" departSpeed="random"/>
+
+    <!-- ── Row 2 — dense corridor: cars + motorcycles ── -->
+    <flow id="flow_h2_L0" type="car"        route="route_h2"
           begin="0" end="290" vehsPerHour="360"
           departLane="0" departPos="random" departSpeed="random"
           arrivalLane="random"/>
-
-    <!-- Ambulance corridor — lane 1 -->
-    <flow id="flow_h2_L1" type="car" route="route_h2"
+    <flow id="flow_h2_L1" type="car"        route="route_h2"
           begin="0" end="290" vehsPerHour="360"
           departLane="1" departPos="random" departSpeed="random"
           arrivalLane="random"/>
-
-    <!-- Other horizontal roads (background traffic) -->
-    <flow id="flow_h0" type="car" route="route_h0"
-          begin="0" end="290" vehsPerHour="180"
-          departLane="best" departPos="random" departSpeed="random"/>
-
-    <flow id="flow_h1" type="car" route="route_h1"
-          begin="0" end="290" vehsPerHour="180"
-          departLane="best" departPos="random" departSpeed="random"/>
-
-    <flow id="flow_h3" type="car" route="route_h3"
-          begin="0" end="290" vehsPerHour="180"
-          departLane="best" departPos="random" departSpeed="random"/>
-
-    <!-- Vertical / cross-traffic -->
-    <flow id="flow_v0" type="car" route="route_v0"
+    <flow id="flow_h2_moto" type="motorcycle" route="route_h2"
           begin="0" end="290" vehsPerHour="120"
+          departLane="best" departPos="random" departSpeed="random"/>
+
+    <!-- ── Row 3 — cars + trucks ── -->
+    <flow id="flow_h3_cars"  type="car"   route="route_h3"
+          begin="0" end="290" vehsPerHour="300"
+          departLane="best" departPos="random" departSpeed="random"/>
+    <flow id="flow_h3_trucks" type="truck" route="route_h3"
+          begin="0" end="290" vehsPerHour="80"
+          departLane="best" departPos="random" departSpeed="random"/>
+
+    <!-- ── Vertical / cross-traffic (cars + motorcycles) ── -->
+    <flow id="flow_v0" type="car"        route="route_v0"
+          begin="0" end="290" vehsPerHour="120"
+          departLane="best" departPos="random" departSpeed="random"/>
+    <flow id="flow_v0_moto" type="motorcycle" route="route_v0"
+          begin="0" end="290" vehsPerHour="40"
           departLane="best" departPos="random" departSpeed="random"/>
 
     <flow id="flow_v1" type="car" route="route_v1"
@@ -87,16 +124,32 @@
           begin="0" end="290" vehsPerHour="120"
           departLane="best" departPos="random" departSpeed="random"/>
 
-    <flow id="flow_v4" type="car" route="route_v4"
+    <flow id="flow_v4" type="car"        route="route_v4"
           begin="0" end="290" vehsPerHour="120"
+          departLane="best" departPos="random" departSpeed="random"/>
+    <flow id="flow_v4_bus" type="bus"    route="route_v4"
+          begin="0" end="290" vehsPerHour="40"
           departLane="best" departPos="random" departSpeed="random"/>
 
     <!-- ============================================================
-         AMBULANCE — departs AFTER flows (sorted by depart time).
-         begin="0" flows come first, then this vehicle at t=5s.
+         AMBULANCES — 4 units on different corridors, staggered.
+         Each departs after t=1 so flows are already sorted first.
+         Colors: ambulance_0=Red, _1=Deep-Pink, _2=White, _3=Orange
          ============================================================ -->
-    <vehicle id="ambulance_0" type="ambulance" route="amb_route"
-             depart="5" departLane="0" departPos="0" departSpeed="max"
+    <vehicle id="ambulance_0" type="ambulance" route="amb_route_r2"
+             depart="5"  departLane="0" departPos="0" departSpeed="max"
              color="1,0,0"/>
+
+    <vehicle id="ambulance_1" type="ambulance" route="amb_route_r0"
+             depart="20" departLane="0" departPos="0" departSpeed="max"
+             color="1,0.08,0.58"/>
+
+    <vehicle id="ambulance_2" type="ambulance" route="amb_route_r3"
+             depart="40" departLane="0" departPos="0" departSpeed="max"
+             color="1,1,1"/>
+
+    <vehicle id="ambulance_3" type="ambulance" route="amb_route_r1"
+             depart="60" departLane="0" departPos="0" departSpeed="max"
+             color="1,0.55,0"/>
 
 </routes>

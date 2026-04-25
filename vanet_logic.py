@@ -41,10 +41,20 @@ FOV_DEGREES          = 70.0          # forward cone half-angle for "ahead" check
 TTC_DANGER_THRESHOLD = 10.0          # seconds — below this, suggest lane change
 
 # SUMO GUI colors  (R, G, B, Alpha) — values 0–255
-COLOR_AMBULANCE   = (255,   0,   0, 255)   # Red
-COLOR_ALERTED     = (255, 200,   0, 255)   # Yellow-orange
-COLOR_NORMAL_CAR  = (  0, 100, 255, 255)   # Blue
-COLOR_CLEAR       = (  0, 180,  80, 255)   # Green — no longer alerted
+# Per-ambulance colors match the <vehicle color="..."> in routes.rou.xml
+AMBULANCE_COLORS: Dict[str, tuple] = {
+    "ambulance_0": (255,   0,   0, 255),   # Red
+    "ambulance_1": (255,  20, 147, 255),   # Deep-Pink
+    "ambulance_2": (255, 255, 255, 255),   # White
+    "ambulance_3": (255, 140,   0, 255),   # Orange
+}
+COLOR_AMBULANCE_DEFAULT = (255,   0,   0, 255)   # fallback
+COLOR_ALERTED     = (255, 210,   0, 255)   # Yellow-amber (alert zone)
+COLOR_NORMAL_CAR  = ( 30, 100, 255, 255)   # Royal blue  (normal car)
+COLOR_NORMAL_TRUCK= ( 90,  90,  90, 255)   # Dark grey   (normal truck)
+COLOR_NORMAL_BUS  = (  0, 153, 140, 255)   # Teal        (normal bus)
+COLOR_NORMAL_MOTO = (255, 115,   0, 255)   # Orange      (normal motorcycle)
+COLOR_CLEAR       = ( 20, 200,  80, 255)   # Bright green — just left alert zone
 
 
 # ─────────────────────────────────────────────────
@@ -138,14 +148,16 @@ class VANETSystem:
             except traci.exceptions.TraCIException:
                 continue   # vehicle may have just left the network
 
-        # ── Find ambulance ──
-        ambulance: Optional[VehicleState] = None
+        # ── Find ALL ambulances & restore their unique colours ──
+        ambulances: List[VehicleState] = []
         for vid, state in vehicles.items():
             if vid.startswith(AMBULANCE_ID_PREFIX):
-                ambulance = state
-                # Force ambulance color to RED every step (in case SUMO resets it)
-                traci.vehicle.setColor(vid, COLOR_AMBULANCE)
-                break
+                ambulances.append(state)
+                amb_color = AMBULANCE_COLORS.get(vid, COLOR_AMBULANCE_DEFAULT)
+                traci.vehicle.setColor(vid, amb_color)
+
+        # Use first ambulance for single-ambulance backward-compat fields
+        ambulance: Optional[VehicleState] = ambulances[0] if ambulances else None
 
         result = StepResult(
             step             = step,
@@ -156,54 +168,52 @@ class VANETSystem:
             all_vehicle_ids  = all_ids,
         )
 
-        if ambulance is None:
-            # Ambulance not yet spawned or has finished its route
+        if not ambulances:
+            # No ambulances in network yet
             self._clear_all_alerts(vehicles)
             return result
 
-        # ── Log ambulance status ──
-        log_ambulance(
-            ambulance.veh_id,
-            ambulance.pos,
-            ambulance.speed,
-            ambulance.angle,
-        )
+        # ── Log status for each ambulance ──
+        for amb in ambulances:
+            log_ambulance(amb.veh_id, amb.pos, amb.speed, amb.angle)
 
-        # ── Broadcast beacon to all other vehicles ──
+        # ── Broadcast beacons from ALL ambulances ──
         currently_alerted: set = set()
 
         for vid, state in vehicles.items():
             if vid.startswith(AMBULANCE_ID_PREFIX):
-                continue  # skip self
+                continue  # skip ambulances themselves
 
-            distance = euclidean_distance(ambulance.pos, state.pos)
+            # Check against every active ambulance
+            alerted_by: Optional[VehicleState] = None
+            best_dist: float = float("inf")
 
-            # ── VANET Alert Condition ──
-            #   1. Within broadcast range
-            #   2. Vehicle is ahead of ambulance (direction check)
-            if distance <= ALERT_RANGE and is_vehicle_ahead(
-                ambulance.pos,
-                ambulance.angle,
-                state.pos,
-                fov_degrees=FOV_DEGREES,
-            ):
+            for amb in ambulances:
+                distance = euclidean_distance(amb.pos, state.pos)
+                if distance <= ALERT_RANGE and is_vehicle_ahead(
+                    amb.pos, amb.angle, state.pos, fov_degrees=FOV_DEGREES
+                ):
+                    if distance < best_dist:
+                        best_dist  = distance
+                        alerted_by = amb
+
+            if alerted_by is not None:
                 currently_alerted.add(vid)
+                distance = best_dist
 
-                # TTC computation (bonus metric)
+                # TTC computation
                 ttc = time_to_collision(
                     distance        = distance,
-                    ambulance_speed = ambulance.speed,
+                    ambulance_speed = alerted_by.speed,
                     vehicle_speed   = state.speed,
-                    ambulance_angle = ambulance.angle,
+                    ambulance_angle = alerted_by.angle,
                     vehicle_angle   = state.angle,
                 )
 
-                # Lane-change suggestion
                 lane_advice = self._suggest_lane_change(
-                    state, ambulance, distance, ttc
+                    state, alerted_by, distance, ttc
                 )
 
-                # Log alert event
                 event = AlertEvent(
                     time        = sim_time,
                     vehicle     = vid,
@@ -214,34 +224,40 @@ class VANETSystem:
                 result.alert_events.append(event)
                 result.alerted_vehicles.append(vid)
 
-                # Print to console (only on first alert or every 20 steps)
+                # Console — only on first alert or every 20 steps
                 if vid not in self._alerted or step % 20 == 0:
                     log_alert(vid, distance, ttc, lane_advice)
 
-                # Accumulate metrics
+                # Accumulate metrics (unique vehicles only)
                 if vid not in self.alerted_set:
                     self.alerted_set.add(vid)
                     self._distance_acc   += distance
                     self._distance_count += 1
                     self.alert_log.append(event)
 
-                # Apply YELLOW color in GUI
+                # Amber colour in GUI
                 traci.vehicle.setColor(vid, COLOR_ALERTED)
 
-                # Track alert state
                 if vid not in self._alerted:
                     self._alerted[vid] = step
 
             else:
-                # Vehicle is out of range or behind ambulance
+                # Out of range / behind all ambulances
                 if vid in self._alerted:
-                    # Just exited alert zone — reset color to green briefly
                     traci.vehicle.setColor(vid, COLOR_CLEAR)
                     del self._alerted[vid]
                 else:
-                    # Normal vehicle — blue
+                    # Restore type-matched colour
                     try:
-                        traci.vehicle.setColor(vid, COLOR_NORMAL_CAR)
+                        vtype = traci.vehicle.getTypeID(vid)
+                        if "truck" in vtype:
+                            traci.vehicle.setColor(vid, COLOR_NORMAL_TRUCK)
+                        elif "bus" in vtype:
+                            traci.vehicle.setColor(vid, COLOR_NORMAL_BUS)
+                        elif "motorcycle" in vtype or "moped" in vtype:
+                            traci.vehicle.setColor(vid, COLOR_NORMAL_MOTO)
+                        else:
+                            traci.vehicle.setColor(vid, COLOR_NORMAL_CAR)
                     except traci.exceptions.TraCIException:
                         pass
 

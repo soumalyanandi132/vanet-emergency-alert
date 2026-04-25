@@ -80,7 +80,13 @@ def run_simulation(args):
 
     vanet = VANETSystem()
     total_steps = 0
-    ambulance_seen = False
+    ambulances_seen: set = set()   # track which amb IDs have been announced
+    AMB_ICONS = {
+        "ambulance_0": "🚑",
+        "ambulance_1": "🚨",
+        "ambulance_2": "🏥",
+        "ambulance_3": "⚡",
+    }
 
     try:
         log_header("Simulation Running — watch the SUMO window!")
@@ -93,14 +99,17 @@ def run_simulation(args):
             # Get all vehicles currently in the simulation
             all_ids = list(traci.vehicle.getIDList())
 
-            # Check if ambulance has spawned
-            ambulance_in_sim = any(v.startswith("ambulance") for v in all_ids)
+            # Check if any new ambulance has just spawned
+            for vid in all_ids:
+                if vid.startswith("ambulance") and vid not in ambulances_seen:
+                    ambulances_seen.add(vid)
+                    icon = AMB_ICONS.get(vid, "🚑")
+                    print(f"\n{Colors.RED}{Colors.BOLD}"
+                          f"  {icon}  {vid.upper()} entered the network "
+                          f"at t={sim_time}s!"
+                          f"{Colors.RESET}\n")
 
-            if ambulance_in_sim and not ambulance_seen:
-                ambulance_seen = True
-                print(f"\n{Colors.RED}{Colors.BOLD}"
-                      f"  🚑 AMBULANCE entered the network at t={sim_time}s!"
-                      f"{Colors.RESET}\n")
+            ambulance_in_sim = any(v.startswith("ambulance") for v in all_ids)
 
             # Grant ambulance green lights at every upcoming junction
             _preempt_traffic_lights_for_ambulance(all_ids)
@@ -115,14 +124,15 @@ def run_simulation(args):
             # Print status every PRINT_EVERY steps
             if step % PRINT_EVERY == 0:
                 log_step(step, sim_time)
+                n_amb = len([v for v in all_ids if v.startswith("ambulance")])
                 if not all_ids:
                     print(f"  {Colors.DIM}  Waiting for vehicles to spawn...{Colors.RESET}")
-                elif not ambulance_in_sim:
-                    print(f"  {Colors.DIM}  {len(all_ids)} vehicles in network. "
-                          f"Ambulance spawns at t=5s...{Colors.RESET}")
+                elif n_amb == 0:
+                    print(f"  {Colors.DIM}  {len(all_ids)} vehicles. "
+                          f"First ambulance spawns at t=5s...{Colors.RESET}")
                 elif not result.alerted_vehicles:
-                    print(f"  {Colors.GREEN}  Ambulance moving — "
-                          f"no vehicles in alert zone yet{Colors.RESET}")
+                    print(f"  {Colors.GREEN}  {n_amb} ambulance(s) moving — "
+                          f"no vehicles in alert zones yet{Colors.RESET}")
 
         print(f"\n{Colors.CYAN}  Simulation finished all {args.steps} steps.{Colors.RESET}")
 
