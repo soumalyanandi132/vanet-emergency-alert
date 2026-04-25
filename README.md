@@ -1,6 +1,6 @@
 # 🚑 VANET-Based Emergency Vehicle Alert System
 
-> **BTech Final Year Project · VANET · SUMO · Python TraCI**
+
 
 A Python simulation of **Vehicle-to-Vehicle (V2V) communication** where an ambulance broadcasts its presence over a VANET network and automatically alerts nearby vehicles — implemented on top of [Eclipse SUMO](https://sumo.dlr.de/) via the TraCI API on a realistic 5 × 5 signalised grid network.
 
