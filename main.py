@@ -18,40 +18,41 @@ except ImportError:
 
 from vanet_logic import VANETSystem
 from utils import log_header, log_step, log_metrics, Colors
+from data_exporter import DataExporter          # ← NEW
 
 BASE_DIR    = Path(__file__).parent
 CONFIG_FILE = BASE_DIR / "simulation.sumocfg"
 STEP_LENGTH = 0.5
-PRINT_EVERY = 4   # print every 4 steps to reduce console spam
+PRINT_EVERY = 4
 
 
 def parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--no-gui",  action="store_true", default=False)
-    p.add_argument("--steps",   type=int, default=600)
-    p.add_argument(
-        "--delay",
-        type=int,
-        default=None,
-        metavar="MS",
-        help="Milliseconds to pause between each simulation step. "
-             "Default: 100 ms in GUI mode, 0 in headless mode.",
-    )
+    p.add_argument("--no-gui",   action="store_true", default=False)
+    p.add_argument("--steps",    type=int, default=600)
+    p.add_argument("--delay",    type=int, default=None, metavar="MS",
+                   help="Milliseconds to pause between each simulation step.")
+    p.add_argument("--export",   action="store_true", default=True,
+                   help="Write vanet_live.json + vanet_replay.json (default: on).")
+    p.add_argument("--no-export", dest="export", action="store_false",
+                   help="Disable JSON export.")
+    p.add_argument("--out-dir",  default=".", metavar="DIR",
+                   help="Directory for exported JSON files (default: current dir).")
     return p.parse_args()
 
 
 def run_simulation(args):
     log_header("VANET Emergency Vehicle Alert System")
     print(f"  Config : {CONFIG_FILE}")
-    print(f"  GUI    : {'DISABLED' if args.no_gui else 'ENABLED'}\n")
+    print(f"  GUI    : {'DISABLED' if args.no_gui else 'ENABLED'}")
+    print(f"  Export : {'ON → ' + args.out_dir if args.export else 'OFF'}\n")
 
     binary = "sumo" if args.no_gui else "sumo-gui"
 
-    # Determine step delay: explicit flag > mode default
     if args.delay is not None:
         step_delay_ms = args.delay
     else:
-        step_delay_ms = 0 if args.no_gui else 100   # 100 ms default in GUI
+        step_delay_ms = 0 if args.no_gui else 100
 
     sumo_cmd = [
         binary,
@@ -60,68 +61,68 @@ def run_simulation(args):
         "--collision.action", "warn",
         "--ignore-route-errors",
         "--no-step-log",
-        "--start",                  # auto-start in GUI
+        "--start",
         "--quit-on-end",
-        "--random",                 # randomise flow departure positions
+        "--random",
     ]
-
-    # Ask the SUMO-GUI itself to slow down its rendering loop
     if not args.no_gui and step_delay_ms > 0:
         sumo_cmd += ["--delay", str(step_delay_ms)]
 
     print("  Connecting to SUMO...")
     traci.start(sumo_cmd)
     print(f"{Colors.GREEN}  ✓ SUMO started and TraCI connected!{Colors.RESET}")
+
     if step_delay_ms > 0:
         print(f"  ⏳ Step delay : {step_delay_ms} ms  "
-              f"(estimated wall-clock: ~{args.steps * step_delay_ms / 1000:.0f}s)\n")
+              f"(~{args.steps * step_delay_ms / 1000:.0f}s wall-clock)\n")
     else:
         print()
 
-    vanet = VANETSystem()
-    total_steps = 0
-    ambulances_seen: set = set()   # track which amb IDs have been announced
+    vanet    = VANETSystem()
+    exporter = DataExporter(output_dir=args.out_dir) if args.export else None
+
+    if exporter:
+        print(f"{Colors.CYAN}  [Exporter] Writing live data to:"
+              f" {Path(args.out_dir) / 'vanet_live.json'}{Colors.RESET}")
+        print(f"{Colors.CYAN}  [Exporter] Open dashboard.html in a browser to watch live.{Colors.RESET}\n")
+
+    total_steps    = 0
+    ambulances_seen: set = set()
     AMB_ICONS = {
-        "ambulance_0": "🚑",
-        "ambulance_1": "🚨",
-        "ambulance_2": "🏥",
-        "ambulance_3": "⚡",
+        "ambulance_0": "🚑", "ambulance_1": "🚨",
+        "ambulance_2": "🏥", "ambulance_3": "⚡",
     }
 
     try:
-        log_header("Simulation Running — watch the SUMO window!")
+        log_header("Simulation Running")
 
         for step in range(args.steps):
             traci.simulationStep()
             sim_time = round(step * STEP_LENGTH, 1)
             total_steps += 1
 
-            # Get all vehicles currently in the simulation
             all_ids = list(traci.vehicle.getIDList())
 
-            # Check if any new ambulance has just spawned
             for vid in all_ids:
                 if vid.startswith("ambulance") and vid not in ambulances_seen:
                     ambulances_seen.add(vid)
                     icon = AMB_ICONS.get(vid, "🚑")
                     print(f"\n{Colors.RED}{Colors.BOLD}"
-                          f"  {icon}  {vid.upper()} entered the network "
-                          f"at t={sim_time}s!"
+                          f"  {icon}  {vid.upper()} entered the network at t={sim_time}s!"
                           f"{Colors.RESET}\n")
 
-            ambulance_in_sim = any(v.startswith("ambulance") for v in all_ids)
-
-            # Grant ambulance green lights at every upcoming junction
             _preempt_traffic_lights_for_ambulance(all_ids)
 
-            # Slow down the Python control loop to match desired pace
             if step_delay_ms > 0:
                 time.sleep(step_delay_ms / 1000.0)
 
-            # Run VANET logic
             result = vanet.process_step(step, sim_time)
 
-            # Print status every PRINT_EVERY steps
+            # ── Export snapshot ──────────────────────────────────────────
+            if exporter:
+                exporter.record(step, sim_time, result, vanet)
+            # ────────────────────────────────────────────────────────────
+
             if step % PRINT_EVERY == 0:
                 log_step(step, sim_time)
                 n_amb = len([v for v in all_ids if v.startswith("ambulance")])
@@ -147,6 +148,8 @@ def run_simulation(args):
             sim_time=final_time,
             alert_log=vanet.alert_log,
         )
+        if exporter:
+            exporter.save_replay()
         try:
             traci.close()
         except Exception:
@@ -155,27 +158,15 @@ def run_simulation(args):
 
 
 def _preempt_traffic_lights_for_ambulance(all_ids: list) -> None:
-    """
-    When an ambulance is within 80 m of a traffic-light junction,
-    force that junction to show ALL-GREEN on the ambulance's road
-    for one step — effectively preempting the signal.
-
-    vClass=emergency already handles most cases in SUMO, but this
-    gives an additional explicit override via TraCI.
-    """
     ambulance_ids = [v for v in all_ids if v.startswith("ambulance")]
     if not ambulance_ids:
         return
-
     for amb_id in ambulance_ids:
         try:
-            # Get upcoming traffic lights within 150 m
             tls_data = traci.vehicle.getNextTLS(amb_id)
             for (tls_id, _link_index, dist, _state) in tls_data:
-                if dist < 80.0:  # within 80 m — force green
-                    controlled_links = traci.trafficlight.getControlledLinks(tls_id)
+                if dist < 80.0:
                     num_phases = len(traci.trafficlight.getControlledLinks(tls_id))
-                    # Build an all-green state string
                     green_state = "G" * max(num_phases, 1)
                     traci.trafficlight.setRedYellowGreenState(tls_id, green_state)
         except traci.exceptions.TraCIException:

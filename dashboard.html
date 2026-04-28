@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VANET Live Dashboard</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #0f1923; color: #e8edf2; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  header { display: flex; align-items: center; gap: 12px; padding: 0 16px; height: 50px; flex-shrink: 0; background: #162029; border-bottom: 1px solid rgba(255,255,255,0.08); flex-wrap: wrap; }
+  header h1 { font-size: 14px; font-weight: 600; }
+  #pill { font-size: 11px; padding: 3px 10px; border-radius: 20px; background: #253040; color: #7a99ad; border: 1px solid rgba(255,255,255,0.1); font-family: monospace; }
+  #pill.live    { background: #0d2e1a; color: #43a047; border-color: #43a047; }
+  #pill.waiting { background: #2e1d0d; color: #ffb300; border-color: #ffb300; }
+  #pill.stale   { background: #2e0d0d; color: #e53935; border-color: #e53935; }
+  #pill.replay  { background: #0d1e2e; color: #1e88e5; border-color: #1e88e5; }
+  #frame-info { font-size: 11px; color: #7a99ad; font-family: monospace; margin-left: auto; }
+  .body { display: flex; flex: 1; overflow: hidden; }
+  #map { flex: 1; }
+  aside { width: 230px; flex-shrink: 0; background: #162029; border-left: 1px solid rgba(255,255,255,0.08); display: flex; flex-direction: column; overflow: hidden; }
+  .panel { padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+  .panel h2 { font-size: 10px; font-weight: 600; color: #7a99ad; text-transform: uppercase; letter-spacing: .6px; margin-bottom: 10px; }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .stat { background: #0f1923; border-radius: 8px; padding: 8px 10px; }
+  .stat .lbl { font-size: 10px; color: #7a99ad; margin-bottom: 2px; }
+  .stat .val { font-size: 18px; font-weight: 600; color: #e8edf2; font-family: monospace; }
+  .legend { display: flex; flex-direction: column; gap: 6px; }
+  .lrow { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #c0cdd6; }
+  .dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; }
+  .sq  { width: 11px; height: 11px; border-radius: 2px; flex-shrink: 0; }
+  #mode-select { width: 100%; padding: 6px 8px; border-radius: 6px; background: #0f1923; border: 1px solid rgba(255,255,255,0.12); color: #e8edf2; font-size: 12px; }
+  #replay-wrap { margin-top: 10px; display: none; }
+  #frame-slider { width: 100%; margin: 6px 0; accent-color: #1e88e5; }
+  .rbtn-row { display: flex; gap: 6px; }
+  .rbtn { flex: 1; padding: 6px 0; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid rgba(255,255,255,0.12); background: #0f1923; color: #e8edf2; }
+  .rbtn.primary { background: #1e88e5; border-color: #1e88e5; color: #fff; }
+  #log-wrap { flex: 1; overflow-y: auto; padding: 10px 14px; }
+  #log-wrap h2 { font-size: 10px; font-weight: 600; color: #7a99ad; text-transform: uppercase; letter-spacing: .6px; margin-bottom: 6px; position: sticky; top: 0; background: #162029; padding: 4px 0; }
+  .le { font-size: 11px; font-family: monospace; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.05); color: #7a99ad; }
+  .le.alert { color: #ffb300; }
+  .le.amb   { color: #e53935; }
+</style>
+</head>
+<body>
+<header>
+  <h1>&#128657; VANET Live Dashboard</h1>
+  <span id="pill" class="waiting">Waiting for simulation...</span>
+  <span id="frame-info"></span>
+</header>
+<div class="body">
+  <div id="map"></div>
+  <aside>
+    <div class="panel">
+      <h2>Metrics</h2>
+      <div class="stats">
+        <div class="stat"><div class="lbl">Total alerted</div><div class="val" id="m-alerted">-</div></div>
+        <div class="stat"><div class="lbl">Avg dist (m)</div><div class="val" id="m-dist">-</div></div>
+        <div class="stat"><div class="lbl">Sim time (s)</div><div class="val" id="m-time">-</div></div>
+        <div class="stat"><div class="lbl">In zone now</div><div class="val" id="m-zone">-</div></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Legend</h2>
+      <div class="legend">
+        <div class="lrow"><div class="dot" style="background:#e53935"></div>Ambulance</div>
+        <div class="lrow"><div class="dot" style="background:#ffb300"></div>Alerted vehicle</div>
+        <div class="lrow"><div class="dot" style="background:#1e88e5"></div>Normal vehicle</div>
+        <div class="lrow"><div class="dot" style="background:#43a047"></div>Just cleared</div>
+        <div class="lrow"><div class="sq"  style="background:#546e7a"></div>RSU junction</div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Mode</h2>
+      <select id="mode-select">
+        <option value="live">Live (auto-refresh)</option>
+        <option value="replay">Replay recording</option>
+      </select>
+      <div id="replay-wrap">
+        <div style="font-size:11px;color:#7a99ad;margin-bottom:4px">
+          Frame <span id="fn">0</span> / <span id="ft">0</span> &nbsp; t=<span id="ft-time">0</span>s
+        </div>
+        <input type="range" id="frame-slider" min="0" value="0" step="1">
+        <div class="rbtn-row">
+          <button class="rbtn primary" id="btn-play">Play</button>
+          <button class="rbtn" id="btn-step">Step</button>
+        </div>
+      </div>
+    </div>
+    <div id="log-wrap">
+      <h2>Event log</h2>
+      <div id="log"></div>
+    </div>
+  </aside>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const ORIGIN_LAT = 28.6139, ORIGIN_LNG = 77.2090;
+const CELL_LAT = 0.0072, CELL_LNG = 0.0072 / 0.857;
+
+const map = L.map('map', { preferCanvas: true })
+             .setView([ORIGIN_LAT + CELL_LAT * 2, ORIGIN_LNG + CELL_LNG * 2], 14);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: 'Map data © OpenStreetMap contributors', maxZoom: 19
+}).addTo(map);
+
+for (let r = 0; r < 5; r++) {
+  for (let c = 0; c < 5; c++) {
+    const lat = ORIGIN_LAT + r * CELL_LAT, lng = ORIGIN_LNG + c * CELL_LNG;
+    L.circleMarker([lat, lng], { radius:5, color:'#546e7a', fillColor:'#546e7a', fillOpacity:0.9, weight:1 })
+     .addTo(map).bindTooltip('j' + r + c, { direction:'top' });
+    if (c < 4) L.polyline([[lat,lng],[lat,ORIGIN_LNG+(c+1)*CELL_LNG]], {color:'#546e7a',weight:1.5,opacity:0.3}).addTo(map);
+    if (r < 4) L.polyline([[lat,lng],[ORIGIN_LAT+(r+1)*CELL_LAT,lng]], {color:'#546e7a',weight:1.5,opacity:0.3}).addTo(map);
+  }
+}
+
+const vMarkers = {};
+let ambCircle = null;
+const COLORS = { ambulance:'#e53935', alerted:'#ffb300', normal:'#1e88e5', cleared:'#43a047' };
+
+function upsertMarker(v) {
+  const col = COLORS[v.state] || '#1e88e5';
+  const r   = v.state === 'ambulance' ? 9 : 6;
+  if (vMarkers[v.id]) {
+    vMarkers[v.id].setLatLng([v.lat, v.lng]);
+    vMarkers[v.id].setStyle({ color:col, fillColor:col });
+    vMarkers[v.id].setRadius(r);
+  } else {
+    vMarkers[v.id] = L.circleMarker([v.lat, v.lng], {
+      radius:r, color:col, fillColor:col, fillOpacity:0.92, weight:1.5
+    }).addTo(map).bindTooltip(v.id + '<br>' + v.speed + ' m/s', { sticky:true });
+  }
+}
+
+function purgeStale(ids) {
+  for (const id in vMarkers) {
+    if (!ids.has(id)) { map.removeLayer(vMarkers[id]); delete vMarkers[id]; }
+  }
+}
+
+function renderFrame(f) {
+  purgeStale(new Set(f.vehicles.map(v => v.id)));
+  f.vehicles.forEach(upsertMarker);
+  if (ambCircle) map.removeLayer(ambCircle);
+  if (f.ambulance_lat != null) {
+    ambCircle = L.circle([f.ambulance_lat, f.ambulance_lng], {
+      radius: f.alert_range_m, color:'#e53935', weight:1.5,
+      dashArray:'6,4', fillColor:'#e53935', fillOpacity:0.06
+    }).addTo(map);
+  }
+  document.getElementById('m-alerted').textContent = f.metrics.total_alerted;
+  document.getElementById('m-dist').textContent    = f.metrics.avg_alert_dist > 0 ? f.metrics.avg_alert_dist.toFixed(1) : '-';
+  document.getElementById('m-time').textContent    = f.sim_time.toFixed(1);
+  document.getElementById('m-zone').textContent    = f.metrics.alerted_this_step;
+}
+
+let lastLogStep = -1;
+function appendLog(f) {
+  if (f.step === lastLogStep) return;
+  lastLogStep = f.step;
+  f.alert_events.forEach(ev => {
+    addLine('t=' + f.sim_time + 's  ALERT ' + ev.vehicle + '  ' + ev.distance + 'm' +
+      (ev.ttc ? '  TTC=' + ev.ttc + 's' : '') + (ev.advice ? '  [' + ev.advice + ']' : ''), 'alert');
+  });
+  if (f.step % 20 === 0 && f.ambulance_lat != null)
+    addLine('t=' + f.sim_time + 's  amb @ [' + f.ambulance_lat + ', ' + f.ambulance_lng + ']', 'amb');
+}
+function addLine(text, cls) {
+  const log = document.getElementById('log');
+  const d = document.createElement('div');
+  d.className = 'le' + (cls ? ' ' + cls : '');
+  d.textContent = text;
+  log.prepend(d);
+  while (log.children.length > 150) log.removeChild(log.lastChild);
+}
+
+function setPill(cls, text) {
+  const p = document.getElementById('pill');
+  p.className = cls; p.textContent = text;
+}
+
+// ── Live mode ─────────────────────────────────────────────────────────────────
+let liveTimer = null, lastStep = -1, staleCount = 0;
+
+async function fetchLive() {
+  try {
+    const res = await fetch('vanet_live.json?_=' + Date.now(), { cache:'no-store' });
+    if (!res.ok) throw new Error();
+    const f = await res.json();
+    if (f.step === lastStep) { staleCount++; if (staleCount > 15) setPill('stale','No new data...'); return; }
+    staleCount = 0; lastStep = f.step;
+    renderFrame(f); appendLog(f);
+    setPill('live', 'LIVE');
+    document.getElementById('frame-info').textContent = 'step ' + f.step + '  |  wall ' + f.wall_time + 's';
+  } catch(e) {
+    staleCount++;
+    if (staleCount > 5) setPill('waiting', 'Waiting for simulation...');
+  }
+}
+
+function startLive() { if (liveTimer) return; liveTimer = setInterval(fetchLive, 200); fetchLive(); }
+function stopLive()  { clearInterval(liveTimer); liveTimer = null; }
+
+// ── Replay mode ───────────────────────────────────────────────────────────────
+let frames = [], replayIdx = 0, replayTimer = null, replaying = false;
+
+async function loadReplay() {
+  addLine('Loading vanet_replay.json...', '');
+  try {
+    const res = await fetch('vanet_replay.json?_=' + Date.now(), { cache:'no-store' });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    frames = data.frames || [];
+    document.getElementById('frame-slider').max = frames.length - 1;
+    document.getElementById('ft').textContent   = frames.length;
+    setPill('replay', 'Replay ready');
+    addLine('Loaded ' + frames.length + ' frames.', '');
+    if (frames.length) showFrame(0);
+  } catch(e) {
+    addLine('vanet_replay.json not found - run simulation first.', 'alert');
+  }
+}
+
+function showFrame(i) {
+  i = Math.max(0, Math.min(i, frames.length-1));
+  replayIdx = i;
+  document.getElementById('frame-slider').value = i;
+  document.getElementById('fn').textContent      = i;
+  document.getElementById('ft-time').textContent = frames[i].sim_time.toFixed(1);
+  renderFrame(frames[i]); appendLog(frames[i]);
+  document.getElementById('frame-info').textContent = 'frame ' + i + '/' + (frames.length-1) + '  t=' + frames[i].sim_time + 's';
+}
+
+document.getElementById('frame-slider').addEventListener('input', function(){ showFrame(+this.value); });
+document.getElementById('btn-step').addEventListener('click', () => showFrame(replayIdx+1));
+document.getElementById('btn-play').addEventListener('click', function(){
+  replaying = !replaying;
+  this.textContent = replaying ? 'Pause' : 'Play';
+  if (replaying) {
+    replayTimer = setInterval(() => {
+      if (replayIdx >= frames.length-1) { replaying=false; this.textContent='Play'; clearInterval(replayTimer); return; }
+      showFrame(replayIdx+1);
+    }, 100);
+  } else { clearInterval(replayTimer); }
+});
+
+document.getElementById('mode-select').addEventListener('change', function(){
+  const isReplay = this.value === 'replay';
+  document.getElementById('replay-wrap').style.display = isReplay ? 'block' : 'none';
+  if (isReplay) { stopLive(); if (!frames.length) loadReplay(); }
+  else { clearInterval(replayTimer); replaying=false; document.getElementById('btn-play').textContent='Play'; startLive(); }
+});
+
+startLive();
+</script>
+</body>
+</html>
