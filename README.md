@@ -1,22 +1,22 @@
-# 🚑 VANET-Based Emergency Vehicle Alert System
+#  VANET-Based Emergency Vehicle Alert System
 
-> **BTech Final Year Project · VANET · SUMO · Python TraCI**
+
 
 A Python simulation of **Vehicle-to-Vehicle (V2V) communication** where an ambulance broadcasts its presence over a VANET network and automatically alerts nearby vehicles — implemented on top of [Eclipse SUMO](https://sumo.dlr.de/) via the TraCI API on a realistic 5 × 5 signalised grid network.
 
 ---
 
-## ✨ Key Features
+##  Key Features
 
 | Feature | Details |
 |---|---|
-| 🚑 Emergency vehicle priority | `vClass="emergency"` + TraCI signal preemption — ambulance never stops at red lights |
-| 📡 VANET broadcast model | Beacon every 0.5 s, 100 m alert range, ±70° forward FOV cone |
-| 🚗 Continuous traffic | `<flow>` elements generate 30–40 cars throughout the entire 300 s simulation |
-| ⏱ Time-to-Collision | Closing-speed TTC estimated each step; lane-change advice issued when TTC < 10 s |
-| 🎨 Live GUI coloring | Red ambulance · Yellow alerted · Blue normal · Green just-cleared |
-| 🕹 Speed control | `--delay` flag lets you slow the simulation for demos or presentations |
-| 📊 Metrics report | Total alerted, average alert distance, TTC log printed at the end |
+|  Emergency vehicle priority | `vClass="emergency"` + TraCI signal preemption — ambulance never stops at red lights |
+| VANET broadcast model | Beacon every 0.5 s, 100 m alert range, ±70° forward FOV cone |
+|  Continuous traffic | `<flow>` elements generate 30–40 cars throughout the entire 300 s simulation |
+|  Time-to-Collision | Closing-speed TTC estimated each step; lane-change advice issued when TTC < 10 s |
+|  Live GUI coloring | Red ambulance · Yellow alerted · Blue normal · Green just-cleared |
+|  Speed control | `--delay` flag lets you slow the simulation for demos or presentations |
+|  Metrics report | Total alerted, average alert distance, TTC log printed at the end |
 
 ---
 
@@ -207,22 +207,22 @@ python main.py --delay 500
 
 ---
 
-## 🔬 VANET Alert Logic
+##  VANET Alert Logic
 
 ```
 Alert fires when ALL conditions are true:
-  ✅  Euclidean distance(ambulance, vehicle) ≤ 100 m
-  ✅  Vehicle lies within ±70° forward cone of ambulance heading
+    Euclidean distance(ambulance, vehicle) ≤ 100 m
+    Vehicle lies within ±70° forward cone of ambulance heading
 ```
 
 ### GUI Colour Scheme
 
 | Colour | Meaning |
 |---|---|
-| 🔴 Red | Ambulance |
-| 🟡 Yellow | Vehicle currently inside alert zone |
-| 🟢 Green | Vehicle just exited alert zone |
-| 🔵 Blue | Normal vehicle (not alerted) |
+|  Red | Ambulance |
+|  Yellow | Vehicle currently inside alert zone |
+|  Green | Vehicle just exited alert zone |
+|  Blue | Normal vehicle (not alerted) |
 
 ### Traffic-Light Preemption (Double Layer)
 
@@ -243,7 +243,7 @@ Alert fires when ALL conditions are true:
 
 ---
 
-## 🛠 Troubleshooting
+##  Troubleshooting
 
 | Problem | Fix |
 |---|---|
@@ -256,7 +256,7 @@ Alert fires when ALL conditions are true:
 
 ---
 
-## 📚 References
+##  References
 
 - Eclipse SUMO Documentation — <https://sumo.dlr.de/docs/>
 - TraCI API Reference — <https://sumo.dlr.de/docs/TraCI.html>
@@ -266,7 +266,7 @@ Alert fires when ALL conditions are true:
 
 ---
 
-## 🎓 Project Info
+##  Project Info
 
 | Item | Detail |
 |---|---|
